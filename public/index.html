@@ -7,26 +7,21 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
-    
     .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-    
     h1 { text-align: center; margin-bottom: 30px; color: #1a1a1a; }
-    
-    .upload-section {
+    .section {
       background: #fff;
       border-radius: 8px;
       padding: 30px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       margin-bottom: 20px;
     }
-    
     .upload-row {
       display: flex;
       gap: 20px;
       margin-bottom: 20px;
       align-items: flex-end;
     }
-    
     .upload-group { flex: 1; }
     .upload-group label { display: block; margin-bottom: 8px; font-weight: 600; }
     .upload-group input[type="file"] {
@@ -36,7 +31,12 @@
       border-radius: 6px;
       cursor: pointer;
     }
-    
+    .upload-group select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
     .btn {
       padding: 12px 24px;
       border: none;
@@ -46,26 +46,22 @@
       font-weight: 600;
       transition: background 0.2s;
     }
-    
     .btn-primary { background: #2563eb; color: #fff; }
     .btn-primary:hover { background: #1d4ed8; }
     .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
-    
     .btn-success { background: #16a34a; color: #fff; }
     .btn-success:hover { background: #15803d; }
-    
     .actions { display: flex; gap: 10px; align-items: center; }
-    
     .status { margin-top: 10px; font-style: italic; color: #666; }
-    
-    .pdf-viewer-section {
-      background: #fff;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      display: none;
+    .preview-section { display: none; }
+    .preview-section h3 { margin-bottom: 15px; }
+    .preview-frame {
+      width: 100%;
+      height: 500px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
     }
-    
+    .pdf-viewer-section { display: none; }
     .pdf-nav {
       display: flex;
       justify-content: space-between;
@@ -74,7 +70,6 @@
       padding-bottom: 15px;
       border-bottom: 1px solid #eee;
     }
-    
     .pdf-nav button {
       padding: 8px 16px;
       border: 1px solid #ddd;
@@ -84,9 +79,32 @@
     }
     .pdf-nav button:hover { background: #f0f0f0; }
     .pdf-nav button:disabled { opacity: 0.5; cursor: not-allowed; }
-    
     .pdf-info { font-weight: 600; }
-    
+    .static-section { margin-bottom: 20px; }
+    .static-section h4 { margin-bottom: 10px; }
+    .rearrange-section {
+      margin-bottom: 15px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #eee;
+    }
+    .rearrange-section h4 { margin-bottom: 10px; }
+    .page-list {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .page-item {
+      padding: 8px 14px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      cursor: grab;
+      user-select: none;
+      font-weight: 600;
+    }
+    .page-item:active { cursor: grabbing; }
+    .page-item.dragging { opacity: 0.4; }
+    .page-item.drag-over { border: 2px solid #2563eb; }
     .pdf-frame {
       width: 100%;
       height: 80vh;
@@ -99,29 +117,52 @@
   <div class="container">
     <h1>📄 Mail Merge</h1>
 
-    <div class="upload-section">
+    <div class="section">
       <div class="upload-row">
         <div class="upload-group">
           <label>Template (.docx with {d.fieldName} tags)</label>
-          <input type="file" id="templateFile" accept=".docx">
+          <input type="file" id="templateFile" accept=".docx" onchange="previewTemplate()">
         </div>
         <div class="upload-group">
           <label>Data (CSV or Excel)</label>
           <input type="file" id="dataFile" accept=".csv,.xlsx,.xls">
         </div>
       </div>
+
       <div class="actions">
-        <button class="btn btn-primary" id="mergeBtn" onclick="runMerge()">Generate</button>
+        <button class="btn btn-primary" onclick="runMerge()">Generate</button>
         <button class="btn btn-success" id="downloadBtn" onclick="downloadAll()" style="display:none">⬇ Download All (ZIP)</button>
       </div>
       <p class="status" id="status"></p>
     </div>
 
-    <div class="pdf-viewer-section" id="viewerSection">
+    <div class="section preview-section" id="previewSection">
+      <h3>📋 Template Preview</h3>
+      <iframe class="preview-frame" id="previewFrame"></iframe>
+    </div>
+
+    <div class="section pdf-viewer-section" id="viewerSection">
       <div class="pdf-nav">
         <button id="prevBtn" onclick="navigate(-1)">← Previous</button>
         <span class="pdf-info" id="pdfInfo"></span>
         <button id="nextBtn" onclick="navigate(1)">Next →</button>
+      </div>
+      <div class="rearrange-section" id="rearrangeSection" style="display:none">
+        <h4>📑 Rearrange Pages (drag to reorder)</h4>
+        <div class="page-list" id="pageList"></div>
+        <button class="btn btn-primary" onclick="saveOrder()">Save Order</button>
+      </div>
+      <div style="margin-bottom:15px;padding-bottom:15px;border-bottom:1px solid #eee;">
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
+          <label style="font-weight:600;">Document Type:</label>
+          <select id="docType" onchange="switchDocType()" style="padding:8px;border:1px solid #ddd;border-radius:4px;">
+            <option value="letter">Letter (+2 extra pages)</option>
+            <option value="brochure">Brochure (+3 extra pages)</option>
+          </select>
+          <span id="pageLimitInfo" style="color:#666;font-style:italic;"></span>
+        </div>
+        <div id="addPageInputs"></div>
+        <button class="btn btn-primary" onclick="addPages()" id="addPagesBtn" style="margin-top:10px;">+ Add Pages</button>
       </div>
       <iframe class="pdf-frame" id="pdfFrame"></iframe>
     </div>
@@ -130,6 +171,83 @@
   <script>
     let files = [];
     let currentIndex = 0;
+
+    function getMaxPages() {
+      return document.getElementById("docType").value === "letter" ? 3 : 4;
+    }
+
+    function getMaxExtraPages() {
+      return document.getElementById("docType").value === "letter" ? 2 : 3;
+    }
+
+    async function switchDocType() {
+      const file = files[currentIndex];
+      // Reset to original generated page
+      try {
+        const res = await fetch("/reset-pages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ target: file.filename })
+        });
+        const result = await res.json();
+        if (result.success) {
+          document.getElementById("pdfFrame").src = `/output/${file.filename}?t=` + Date.now();
+          await loadPageCount();
+          await updateAddPageInputs();
+        }
+      } catch (err) {
+        console.error("Reset error:", err);
+      }
+    }
+
+    async function updateAddPageInputs() {
+      const file = files[currentIndex];
+      const res = await fetch(`/page-count/${file.filename}`);
+      const result = await res.json();
+      const currentPages = result.success ? result.pageCount : 1;
+      const maxExtra = getMaxExtraPages();
+      const extraAdded = currentPages - 1; // subtract the original generated page
+      const remaining = maxExtra - extraAdded;
+
+      const info = document.getElementById("pageLimitInfo");
+      const container = document.getElementById("addPageInputs");
+
+      if (remaining <= 0) {
+        info.textContent = `All ${maxExtra} extra pages added`;
+        container.innerHTML = "";
+        document.getElementById("addPagesBtn").style.display = "none";
+        return;
+      }
+
+      info.textContent = `${extraAdded}/${maxExtra} extra pages added — can add ${remaining} more`;
+      document.getElementById("addPagesBtn").style.display = "inline-block";
+      let html = '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
+      for (let i = 1; i <= remaining; i++) {
+        html += `<div class="upload-group">
+          <label>Page ${i} (.docx or .pdf)</label>
+          <input type="file" class="addFile" accept=".docx,.pdf">
+        </div>`;
+      }
+      html += '</div>';
+      container.innerHTML = html;
+    }
+
+    async function previewTemplate() {
+      const template = document.getElementById("templateFile").files[0];
+      if (!template) return;
+      const formData = new FormData();
+      formData.append("template", template);
+      try {
+        const res = await fetch("/preview", { method: "POST", body: formData });
+        const result = await res.json();
+        if (result.success) {
+          document.getElementById("previewSection").style.display = "block";
+          document.getElementById("previewFrame").src = result.pdf;
+        }
+      } catch (err) {
+        console.error("Preview error:", err);
+      }
+    }
 
     async function runMerge() {
       const template = document.getElementById("templateFile").files[0];
@@ -140,9 +258,7 @@
         return;
       }
 
-      const btn = document.getElementById("mergeBtn");
       const status = document.getElementById("status");
-      btn.disabled = true;
       status.textContent = "Generating documents...";
 
       const formData = new FormData();
@@ -159,15 +275,14 @@
           status.textContent = `✅ Generated ${files.length} documents.`;
           document.getElementById("downloadBtn").style.display = "inline-block";
           document.getElementById("viewerSection").style.display = "block";
+          document.getElementById("previewSection").style.display = "none";
           showPDF();
         } else {
-          status.textContent = "❌ Error generating documents.";
+          status.textContent = "❌ Error: " + result.error;
         }
       } catch (err) {
         status.textContent = "❌ Error: " + err.message;
       }
-
-      btn.disabled = false;
     }
 
     function showPDF() {
@@ -176,6 +291,88 @@
       document.getElementById("pdfInfo").textContent = `Document ${file.index} of ${files.length}`;
       document.getElementById("prevBtn").disabled = currentIndex === 0;
       document.getElementById("nextBtn").disabled = currentIndex === files.length - 1;
+      loadPageCount();
+      updateAddPageInputs();
+    }
+
+    async function loadPageCount() {
+      const file = files[currentIndex];
+      try {
+        const res = await fetch(`/page-count/${file.filename}`);
+        const result = await res.json();
+        if (result.success && result.pageCount > 1) {
+          document.getElementById("rearrangeSection").style.display = "block";
+          renderPageList(result.pageCount);
+        } else {
+          document.getElementById("rearrangeSection").style.display = "none";
+        }
+      } catch (err) {
+        document.getElementById("rearrangeSection").style.display = "none";
+      }
+    }
+
+    function renderPageList(count) {
+      const list = document.getElementById("pageList");
+      list.innerHTML = "";
+      for (let i = 0; i < count; i++) {
+        const item = document.createElement("div");
+        item.className = "page-item";
+        item.textContent = `Page ${i + 1}`;
+        item.draggable = true;
+        item.dataset.index = i;
+        item.addEventListener("dragstart", (e) => {
+          e.dataTransfer.setData("text/plain", i);
+          item.classList.add("dragging");
+        });
+        item.addEventListener("dragend", () => item.classList.remove("dragging"));
+        item.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          item.classList.add("drag-over");
+        });
+        item.addEventListener("dragleave", () => item.classList.remove("drag-over"));
+        item.addEventListener("drop", (e) => {
+          e.preventDefault();
+          item.classList.remove("drag-over");
+          const fromIndex = parseInt(e.dataTransfer.getData("text/plain"));
+          const toIndex = parseInt(item.dataset.index);
+          reorderItems(fromIndex, toIndex);
+        });
+        list.appendChild(item);
+      }
+    }
+
+    function reorderItems(from, to) {
+      const list = document.getElementById("pageList");
+      const items = [...list.children];
+      const item = items.splice(from, 1)[0];
+      items.splice(to, 0, item);
+      list.innerHTML = "";
+      items.forEach((el, i) => {
+        el.dataset.index = i;
+        list.appendChild(el);
+      });
+    }
+
+    async function saveOrder() {
+      const items = [...document.getElementById("pageList").children];
+      const pageOrder = items.map(item => parseInt(item.textContent.replace("Page ", "")) - 1);
+      const file = files[currentIndex];
+      try {
+        const res = await fetch("/rearrange", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ target: file.filename, pageOrder })
+        });
+        const result = await res.json();
+        if (result.success) {
+          document.getElementById("pdfFrame").src = `/output/${file.filename}?t=` + Date.now();
+          loadPageCount();
+        } else {
+          alert("Error: " + result.error);
+        }
+      } catch (err) {
+        alert("Error rearranging: " + err.message);
+      }
     }
 
     function navigate(dir) {
@@ -185,6 +382,45 @@
 
     function downloadAll() {
       window.location.href = "/download-all";
+    }
+
+    async function addPages() {
+      const addFiles = [...document.querySelectorAll(".addFile")]
+        .map(input => input.files[0])
+        .filter(Boolean);
+
+      if (addFiles.length === 0) {
+        alert("Please select at least one file to add.");
+        return;
+      }
+
+      const file = files[currentIndex];
+      const target = file.filename;
+      const maxPages = getMaxPages(); // 3 for letter, 4 for brochure
+
+      for (const pageFile of addFiles) {
+        const formData = new FormData();
+        formData.append("page", pageFile);
+        formData.append("target", target);
+        formData.append("position", "after");
+        formData.append("maxPages", maxPages);
+
+        try {
+          const res = await fetch("/add-page", { method: "POST", body: formData });
+          const result = await res.json();
+          if (!result.success) {
+            alert("Error: " + result.error);
+            break;
+          }
+        } catch (err) {
+          alert("Error adding page: " + err.message);
+          break;
+        }
+      }
+
+      document.getElementById("pdfFrame").src = `/output/${target}?t=` + Date.now();
+      await loadPageCount();
+      await updateAddPageInputs();
     }
   </script>
 </body>
