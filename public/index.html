@@ -152,7 +152,7 @@
         <div class="page-list" id="pageList"></div>
         <button class="btn btn-primary" onclick="saveOrder()">Save Order</button>
       </div>
-      <div style="margin-bottom:15px;padding-bottom:15px;border-bottom:1px solid #eee;">
+      <div id="addPagesSection" style="margin-bottom:15px;padding-bottom:15px;border-bottom:1px solid #eee;">
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
           <label style="font-weight:600;">Document Type:</label>
           <select id="docType" onchange="switchDocType()" style="padding:8px;border:1px solid #ddd;border-radius:4px;">
@@ -171,6 +171,7 @@
   <script>
     let files = [];
     let currentIndex = 0;
+    let personalizedPageIndex = 0; // tracks where the personalized page is after rearranging
 
     function getMaxPages() {
       return document.getElementById("docType").value === "letter" ? 3 : 4;
@@ -292,7 +293,15 @@
       document.getElementById("prevBtn").disabled = currentIndex === 0;
       document.getElementById("nextBtn").disabled = currentIndex === files.length - 1;
       loadPageCount();
-      updateAddPageInputs();
+
+      // Only show add pages and rearrange for first document
+      const addSection = document.getElementById("addPagesSection");
+      if (currentIndex === 0) {
+        addSection.style.display = "block";
+        updateAddPageInputs();
+      } else {
+        addSection.style.display = "none";
+      }
     }
 
     async function loadPageCount() {
@@ -300,7 +309,7 @@
       try {
         const res = await fetch(`/page-count/${file.filename}`);
         const result = await res.json();
-        if (result.success && result.pageCount > 1) {
+        if (result.success && result.pageCount > 1 && currentIndex === 0) {
           document.getElementById("rearrangeSection").style.display = "block";
           renderPageList(result.pageCount);
         } else {
@@ -317,7 +326,7 @@
       for (let i = 0; i < count; i++) {
         const item = document.createElement("div");
         item.className = "page-item";
-        item.textContent = `Page ${i + 1}`;
+        item.textContent = i === personalizedPageIndex ? `Page ${i + 1} ★` : `Page ${i + 1}`;
         item.draggable = true;
         item.dataset.index = i;
         item.addEventListener("dragstart", (e) => {
@@ -355,8 +364,16 @@
 
     async function saveOrder() {
       const items = [...document.getElementById("pageList").children];
-      const pageOrder = items.map(item => parseInt(item.textContent.replace("Page ", "")) - 1);
+      const pageOrder = items.map(item => {
+        const text = item.textContent.replace(" ★", "");
+        return parseInt(text.replace("Page ", "")) - 1;
+      });
       const file = files[currentIndex];
+
+      // Track where the personalized page ends up
+      const oldPersonalizedIndex = personalizedPageIndex;
+      personalizedPageIndex = pageOrder.indexOf(oldPersonalizedIndex);
+
       try {
         const res = await fetch("/rearrange", {
           method: "POST",
@@ -367,6 +384,10 @@
         if (result.success) {
           document.getElementById("pdfFrame").src = `/output/${file.filename}?t=` + Date.now();
           loadPageCount();
+          // Auto-apply to all documents
+          if (files.length > 1) {
+            await applyToAll();
+          }
         } else {
           alert("Error: " + result.error);
         }
@@ -421,6 +442,35 @@
       document.getElementById("pdfFrame").src = `/output/${target}?t=` + Date.now();
       await loadPageCount();
       await updateAddPageInputs();
+      // Auto-apply to all documents
+      if (files.length > 1) {
+        await applyToAll();
+      }
+    }
+
+    async function applyToAll() {
+      const status = document.getElementById("status");
+      status.textContent = "Applying to all documents...";
+
+      try {
+        const res = await fetch("/apply-to-all", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            source: files[0].filename,
+            targets: files.slice(1).map(f => f.filename),
+            personalizedPageIndex: personalizedPageIndex
+          })
+        });
+        const result = await res.json();
+        if (result.success) {
+          status.textContent = `✅ Applied to all ${files.length} documents.`;
+        } else {
+          status.textContent = "❌ Error: " + result.error;
+        }
+      } catch (err) {
+        status.textContent = "❌ Error: " + err.message;
+      }
     }
   </script>
 </body>

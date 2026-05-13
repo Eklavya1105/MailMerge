@@ -178,6 +178,57 @@ app.post("/combine", upload.array("pages", 3), async (req, res) => {
   }
 });
 
+app.post("/apply-to-all", async (req, res) => {
+  try {
+    const { source, targets, personalizedPageIndex } = req.body;
+    const outputDir = path.join(__dirname, "output");
+    const originalDir = path.join(__dirname, "originals");
+    const sourcePath = path.join(outputDir, source);
+
+    if (!fs.existsSync(sourcePath)) {
+      return res.status(404).json({ success: false, error: "Source file not found" });
+    }
+
+    const sourcePdf = await PDFDocument.load(fs.readFileSync(sourcePath));
+    const sourcePageCount = sourcePdf.getPageCount();
+
+    // Get indices of extra (static) pages from source
+    const extraIndices = [];
+    for (let i = 0; i < sourcePageCount; i++) {
+      if (i !== personalizedPageIndex) extraIndices.push(i);
+    }
+
+    for (const target of targets) {
+      const originalPath = path.join(originalDir, target);
+      if (!fs.existsSync(originalPath)) continue;
+
+      const targetOrigPdf = await PDFDocument.load(fs.readFileSync(originalPath));
+      const newPdf = await PDFDocument.create();
+
+      // Build the new PDF following source's page order
+      for (let i = 0; i < sourcePageCount; i++) {
+        if (i === personalizedPageIndex) {
+          // Insert target's personalized page here
+          const [page] = await newPdf.copyPages(targetOrigPdf, [0]);
+          newPdf.addPage(page);
+        } else {
+          // Copy the static page from source
+          const [page] = await newPdf.copyPages(sourcePdf, [i]);
+          newPdf.addPage(page);
+        }
+      }
+
+      const finalBytes = await newPdf.save();
+      fs.writeFileSync(path.join(outputDir, target), finalBytes);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Apply to all error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.post("/reset-pages", (req, res) => {
   try {
     const { target } = req.body;
