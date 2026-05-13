@@ -1,8 +1,8 @@
 const express = require("express");
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
-const { execSync } = require("child_process");
+const path = require("node:path");
+const fs = require("node:fs");
+const { execSync } = require("node:child_process");
 const carbone = require("carbone");
 const { parse } = require("csv-parse/sync");
 const archiver = require("archiver");
